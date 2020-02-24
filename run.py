@@ -3,12 +3,15 @@ from datetime import datetime
 
 from telegram import InlineQueryResultArticle, ParseMode, \
     InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup, \
-    KeyboardButton, ReplyKeyboardMarkup, Update
+    KeyboardButton, ReplyKeyboardMarkup, Update, InlineQueryResultPhoto, \
+    InlineQueryResultCachedPhoto
 from telegram.ext import Updater, InlineQueryHandler, CommandHandler, \
     CallbackQueryHandler, MessageHandler, Filters, CallbackContext
 
 from config import token, god_chat_id
 from nt_list import NotetonList
+from nt_list_item_photo import NotetonListItemPhoto
+from nt_s3_manager import NotetonS3Manager
 from nt_state import NotetonState
 
 from nt_users_manager import NotetonUsersManager
@@ -25,7 +28,7 @@ def callback_query_handler(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     user = NotetonUsersManager.get_user(user_id)
     text = update.callback_query.data
-
+    logger.info(f'message in callback_query {text}')
     if user.get_state() == NotetonState.CREATE_LIST_TYPE:
         types = NotetonList.get_types()
         if text in types:
@@ -38,6 +41,21 @@ def callback_query_handler(update: Update, context: CallbackContext):
         else:
             context.bot.send_message(chat_id=chat_id,
                                      text=f'Wrong type, please, use buttons')
+    if user.get_state() == NotetonState.ADDED_PHOTO:
+        lists = NotetonUsersManager.get_lists_of_user(user_id)
+        if text in [x.list_name for x in lists]:
+            list_ = NotetonUsersManager.get_list_of_user_by_name(user_id, text)
+            user.tmp_item.list_id = list_.id
+            user.tmp_item.generate_key()
+            NotetonUsersManager.add_photo_to_list(user.tmp_item)
+            user.set_state(NotetonState.MAIN_MENU)
+            context.bot.send_message(chat_id=chat_id,
+                                     text=f'Images added to list {text}, '
+                                          f'you can get whole list via '
+                                          f'@noteton_bot {text}')
+        else:
+            context.bot.send_message(chat_id=chat_id,
+                                     text=f'Wrong list, please, use buttons')
     else:
         if text.endswith(NotetonList.EDIT_COMMAND):
             list_name = text[:len(text) - len(NotetonList.EDIT_COMMAND)]
@@ -80,7 +98,38 @@ def callback_query_handler(update: Update, context: CallbackContext):
 def inline_query(update: Update, context: CallbackContext):
     """Handle the inline query."""
     query = update.inline_query.query
-    update.inline_query.answer('results', cache_time=10)
+    user_id = update.effective_user.id
+    nt_list = NotetonUsersManager.get_list_of_user_by_name(user_id, query)
+    if nt_list:
+        items = NotetonUsersManager.get_items_of_list(user_id, nt_list)
+        answer_items = []
+        if items:
+            for item in items:
+                url = NotetonS3Manager().generate_pre_signed_url(item.key)
+                id_ = item.id
+                item = InlineQueryResultPhoto(id=id_, photo_url=url, thumb_url=url)
+                answer_items.append(item)
+        update.inline_query.answer(answer_items, cache_time=5, is_personal=True,
+                                   timeout=300)
+    if query == 's':
+        images_keys = NotetonS3Manager().get_list_images('user_id', 'list_id')
+        items = []
+        for image_key in images_keys:
+            url = NotetonS3Manager().generate_pre_signed_url(image_key)
+            id_ = url.split('/')[-1].split('.')[0]
+            item = InlineQueryResultPhoto(id=id_, photo_url=url, thumb_url=url)
+            items.append(item)
+        # items.append(
+        #     # InlineQueryResultCachedPhoto(photo_file_id='AgACAgIAAxkBAAIBMl5T8xzvsgABIbf5VZssgMY-45UHUgACQK4xGx0CoEoTHr0j5Yr1dtB4wQ8ABAEAAwIAA3gAA03XBAABGAQ',
+        #     #                              id='ssss')
+        #     InlineQueryResultPhoto(id='ttttt',
+        #                            photo_width=512,
+        #                            photo_height=512,
+        #                            thumb_url='https://noteton.s3.eu-central-1.amazonaws.com/user_id/list_id/photo_2018-02-16_01-59-04.jpg',
+        #                            photo_url='https://noteton.s3.eu-central-1.amazonaws.com/user_id/list_id/photo_2018-02-16_01-59-04.jpg')
+        # )
+        update.inline_query.answer(items, cache_time=0, is_personal=True,
+                                   timeout=300)
 
 
 def message_handler(update: Update, context: CallbackContext):
@@ -151,6 +200,38 @@ def message_handler(update: Update, context: CallbackContext):
 
     # context.bot.send_message(chat_id=chat_id,
     #                          text=f'I have new message: {text}')
+
+
+def photo_handler(update: Update, context: CallbackContext):
+    photo_id = update.message.photo[-1].file_id
+    user_id = update.effective_user.id
+    chat_id = update.message.chat_id
+    new_file = context.bot.get_file(photo_id)
+    byte_array = new_file.download_as_bytearray()
+    item = NotetonListItemPhoto(user_id=user_id,
+                                file_id=photo_id,
+                                obj=byte_array)
+
+    user = NotetonUsersManager.get_user(user_id)
+    user.tmp_item = item
+    user.set_state(NotetonState.ADDED_PHOTO)
+    lists = NotetonUsersManager.get_lists_of_user_by_type(user_id,
+                                                          NotetonList.TYPE_IMAGES)
+    if not lists:
+        context.bot.send_message(chat_id=chat_id,
+                                 text=f'Oops, you have no lists with images,'
+                                      f'please, create at least one first')
+        return
+    button_list = []
+    for list_ in lists:
+        button = [InlineKeyboardButton(list_.list_name,
+                                       callback_data=list_.list_name)]
+        button_list.append(button)
+    reply_markup = InlineKeyboardMarkup(button_list)
+
+    context.bot.send_message(chat_id=chat_id,
+                             text=f'Choose the list:',
+                             reply_markup=reply_markup)
 
 
 def start(update: Update, context: CallbackContext):
@@ -243,6 +324,7 @@ def main():
     dp.add_handler(InlineQueryHandler(inline_query))
     dp.add_handler(CallbackQueryHandler(callback_query_handler))
     dp.add_handler(MessageHandler(Filters.text, message_handler))
+    dp.add_handler(MessageHandler(Filters.photo, photo_handler))
 
     updater.start_polling()
     updater.idle()

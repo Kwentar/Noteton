@@ -5,12 +5,12 @@ import boto3
 from boto3.dynamodb.conditions import Key, Attr
 
 from nt_list import NotetonList
+from nt_list_item_photo import NotetonListItemPhoto
 from nt_user import NotetonUser
 
 
 class NotetonDatabaseManager:
     def __init__(self):
-        # self.client = boto3.client('dynamodb', region_name='eu-central-1')
         self.db = boto3.resource('dynamodb', region_name='eu-central-1')
         self.users_table = self.db.Table('NotetonUser')
         self.list_table = self.db.Table('NotetonList')
@@ -43,7 +43,7 @@ class NotetonDatabaseManager:
         :return: lists of NotetonList of user
         """
         result = self.list_table.query(
-                    KeyConditionExpression=Key('user_id').eq(user_id))
+            KeyConditionExpression=Key('user_id').eq(user_id))
         items = result['Items']
         nt_lists = []
         for item in items:
@@ -66,8 +66,30 @@ class NotetonDatabaseManager:
                                                     'list_id': list_id})
         return response
 
+    def add_photo_item(self, item):
+        response = self.list_item_table.put_item(Item=item.to_dict())
+
+        return response
+
+    def get_items_of_list(self, user_id, nt_list: NotetonList):
+        result = self.list_item_table.query(
+            KeyConditionExpression=Key('list_id').eq(nt_list.id))
+
+        items = result['Items']
+        nt_items = []
+        for item in items:
+            if nt_list.type == NotetonList.TYPE_IMAGES:
+                nt_item = NotetonListItemPhoto(user_id=user_id,
+                                               list_id=nt_list.id,
+                                               id_=item['item_id'],
+                                               file_id=item['file_id'],
+                                               key=item['key'])
+                nt_items.append(nt_item)
+        return nt_items
+
 
 if __name__ == '__main__':
     db_manager = NotetonDatabaseManager()
-    res = db_manager.get_lists_of_user('2223')
+    # res = db_manager.get_items_of_list('177349801',
+    #                                    '401203bf-7830-4720-8eb4-a017f659d3b9')
     print('finish')

@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from nt_list import NotetonList
+from nt_list_item import NotetonListItem
 from nt_state import NotetonState
 
 
@@ -10,6 +11,7 @@ class NotetonUser:
         self.registration_date = datetime.now()
         self.state = NotetonState()
         self.tmp_list = NotetonList('-1', '123')
+        self.tmp_item = NotetonListItem(user_id)
 
     def convert_user_to_dict(self):
         return {'user_id': self.user_id,
