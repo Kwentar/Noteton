@@ -13,6 +13,7 @@ from nt_list import NotetonList
 from nt_list_item_photo import NotetonListItemPhoto
 from nt_s3_manager import NotetonS3Manager
 from nt_state import NotetonState
+from nt_user import NotetonUser
 
 from nt_users_manager import NotetonUsersManager
 
@@ -120,67 +121,105 @@ def message_handler(update: Update, context: CallbackContext):
     user = NotetonUsersManager.get_user(user_id)
     logger.info(f'I have new message: {text} from {user_id}')
 
-    if user.get_state() == NotetonState.MAIN_MENU:
-        if text == 'Create list':
-            create_list(update, context)
-        elif text == 'My lists':
-            my_lists(update, context)
-        elif text == 'Info & Help':
-            info_and_help(update, context)
-        elif text == 'Send feedback':
-            feedback(update, context)
+    if text == 'Main menu':
+        start(update, context)
+    elif text == 'Create list':
+        create_list(update, context)
+    elif text == 'My lists':
+        my_lists(update, context)
+    elif text == 'Info & Help':
+        info_and_help(update, context)
+    elif text == 'Send feedback':
+        feedback(update, context)
     elif user.get_state() == NotetonState.CREATE_LIST_NAME:
-
-        nt_lists = NotetonUsersManager.get_lists_of_user(user_id)
-        names = [x.list_name for x in nt_lists]
-        val_result, message = NotetonList.validate_list_name(text, names)
-
-        if val_result:
-            user.tmp_list = NotetonList(user_id, text)
-            user.set_state(NotetonState.CREATE_LIST_TYPE)
-
-            types = NotetonList.get_types()
-            button_list = []
-
-            for type_ in types:
-                button = [InlineKeyboardButton(type_.split('_')[1].capitalize(),
-                                               callback_data=type_)]
-                button_list.append(button)
-            reply_markup = InlineKeyboardMarkup(button_list)
-
-            context.bot.send_message(chat_id=chat_id,
-                                     text=f'Choose the type of list:',
-                                     reply_markup=reply_markup)
-        else:
-            context.bot.send_message(chat_id=chat_id,
-                                     text=message)
+        process_create_list(chat_id, context, text, user)
     elif user.get_state() == NotetonState.EDIT_LIST:
-        nt_lists = NotetonUsersManager.get_lists_of_user(user_id)
-        names = [x.list_name for x in nt_lists]
-        val_result, message = NotetonList.validate_list_name(text, names)
-
-        if val_result:
-            user.set_state(NotetonState.MAIN_MENU)
-            user.tmp_list.list_name = text
-            NotetonUsersManager.change_list_name(user_id,
-                                                 user.tmp_list)
-            context.bot.send_message(chat_id=chat_id,
-                                     text=f'The list name has been changed ✅')
-        else:
-            context.bot.send_message(chat_id=chat_id,
-                                     text=message)
+        process_edit_list(chat_id, context, text, user)
     elif user.get_state() == NotetonState.FEEDBACK:
-        feedback_text = f'******FEEDBACK*******\n' \
-                        f'from user {user_id} with username ' \
-                        f'{update.effective_user.username} and fullname ' \
-                        f'{update.effective_user.full_name}:\n{text}'
-        context.bot.send_message(chat_id=god_chat_id, text=feedback_text)
-        context.bot.send_message(chat_id=chat_id, text='Message has been sent, '
-                                                       'thank you!')
-        user.set_state(NotetonState.MAIN_MENU)
+        process_feedback(chat_id, update, context, user)
 
-    # context.bot.send_message(chat_id=chat_id,
-    #                          text=f'I have new message: {text}')
+
+def process_feedback(chat_id: int,
+                     update: Update,
+                     context: CallbackContext,
+                     user: NotetonUser):
+    """
+    Process feedback command
+    :param chat_id: chat id for answer
+    :param update: update from telegram api
+    :param context: context from telegram api
+    :param user: current user
+    :return: None, send answer to user, change user state to MAIN_MENU
+    """
+    feedback_text = f'******FEEDBACK*******\n' \
+                    f'from user {user.user_id} with username ' \
+                    f'{update.effective_user.username} and fullname ' \
+                    f'{update.effective_user.full_name}:\n{update.message.text}'
+    context.bot.send_message(chat_id=god_chat_id, text=feedback_text)
+    context.bot.send_message(chat_id=chat_id, text='Message has been sent, '
+                                                   'thank you!')
+    user.set_state(NotetonState.MAIN_MENU)
+
+
+def process_edit_list(chat_id: int,
+                      context: CallbackContext,
+                      new_list_name: str,
+                      user: NotetonUser):
+    """
+    Process editing list, currently only name can be changed
+    :param chat_id: chat id for answer
+    :param context: context from telegram api
+    :param new_list_name: new list name
+    :param user: current user
+    :return: None, message will be send to user, change user state to MAIN_MENU
+    """
+    nt_lists = NotetonUsersManager.get_lists_of_user(user.user_id)
+    names = [x.list_name for x in nt_lists]
+    val_result, message = NotetonList.validate_list_name(new_list_name, names)
+    if val_result:
+        user.set_state(NotetonState.MAIN_MENU)
+        user.tmp_list.list_name = new_list_name
+        NotetonUsersManager.change_list_name(user.user_id,
+                                             user.tmp_list)
+        context.bot.send_message(chat_id=chat_id,
+                                 text=f'The list name has been changed ✅')
+    else:
+        context.bot.send_message(chat_id=chat_id,
+                                 text=message)
+
+
+def process_create_list(chat_id, context, list_name, user):
+    """
+    Process create list logic
+    :param chat_id: chat id for answer
+    :param context: context from telegram api
+    :param list_name: list name
+    :param user: current user
+    :return: None, change user state to CREATE_LIST_TYPE and send invite
+             to choosing list type
+    """
+    nt_lists = NotetonUsersManager.get_lists_of_user(user.user_id)
+    names = [x.list_name for x in nt_lists]
+    val_result, message = NotetonList.validate_list_name(list_name, names)
+    if val_result:
+        user.tmp_list = NotetonList(user.user_id, list_name)
+        user.set_state(NotetonState.CREATE_LIST_TYPE)
+
+        types = NotetonList.get_types()
+        button_list = []
+
+        for type_ in types:
+            button = [InlineKeyboardButton(type_.split('_')[1].capitalize(),
+                                           callback_data=type_)]
+            button_list.append(button)
+        reply_markup = InlineKeyboardMarkup(button_list)
+
+        context.bot.send_message(chat_id=chat_id,
+                                 text=f'Choose the type of list:',
+                                 reply_markup=reply_markup)
+    else:
+        context.bot.send_message(chat_id=chat_id,
+                                 text=message)
 
 
 def photo_handler(update: Update, context: CallbackContext):
@@ -223,7 +262,7 @@ def start(update: Update, context: CallbackContext):
     user = NotetonUsersManager.get_user(user_id)
 
     user.set_state(NotetonState.MAIN_MENU)
-    buttons = [['Create list'], ['My lists'],
+    buttons = [['Main menu'], ['Create list'], ['My lists'],
                ['Info & Help'], ['Send feedback']]
 
     reply_markup = ReplyKeyboardMarkup(buttons)
