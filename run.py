@@ -105,30 +105,11 @@ def inline_query(update: Update, context: CallbackContext):
         answer_items = []
         if items:
             for item in items:
-                url = NotetonS3Manager().generate_pre_signed_url(item.key)
+                # url = NotetonS3Manager().generate_pre_signed_url(item.key)
                 id_ = item.id
-                item = InlineQueryResultPhoto(id=id_, photo_url=url, thumb_url=url)
+                item = InlineQueryResultCachedPhoto(id=id_, photo_file_id=item.file_id)
                 answer_items.append(item)
         update.inline_query.answer(answer_items, cache_time=5, is_personal=True,
-                                   timeout=300)
-    if query == 's':
-        images_keys = NotetonS3Manager().get_list_images('user_id', 'list_id')
-        items = []
-        for image_key in images_keys:
-            url = NotetonS3Manager().generate_pre_signed_url(image_key)
-            id_ = url.split('/')[-1].split('.')[0]
-            item = InlineQueryResultPhoto(id=id_, photo_url=url, thumb_url=url)
-            items.append(item)
-        # items.append(
-        #     # InlineQueryResultCachedPhoto(photo_file_id='AgACAgIAAxkBAAIBMl5T8xzvsgABIbf5VZssgMY-45UHUgACQK4xGx0CoEoTHr0j5Yr1dtB4wQ8ABAEAAwIAA3gAA03XBAABGAQ',
-        #     #                              id='ssss')
-        #     InlineQueryResultPhoto(id='ttttt',
-        #                            photo_width=512,
-        #                            photo_height=512,
-        #                            thumb_url='https://noteton.s3.eu-central-1.amazonaws.com/user_id/list_id/photo_2018-02-16_01-59-04.jpg',
-        #                            photo_url='https://noteton.s3.eu-central-1.amazonaws.com/user_id/list_id/photo_2018-02-16_01-59-04.jpg')
-        # )
-        update.inline_query.answer(items, cache_time=0, is_personal=True,
                                    timeout=300)
 
 
