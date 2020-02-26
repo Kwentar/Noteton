@@ -8,7 +8,7 @@ class NotetonState:
     EDIT_LIST = 'EDIT_LIST'
     DELETE_LIST = 'DELETE_LIST'
     FEEDBACK = 'FEEDBACK'
-    ADDED_PHOTO = 'ADDED_PHOTO'
+    ADD_PHOTO = 'ADDED_PHOTO'
 
     def __init__(self):
         self.state = NotetonState.MAIN_MENU

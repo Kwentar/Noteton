@@ -12,6 +12,7 @@ class NotetonUser:
         self.state = NotetonState()
         self.tmp_list = NotetonList('-1', '123')
         self.tmp_item = NotetonListItem(user_id)
+        self.lists_message_id = None
 
     def convert_user_to_dict(self):
         return {'user_id': self.user_id,
