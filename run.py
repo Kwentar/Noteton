@@ -2,12 +2,14 @@ import logging
 from datetime import datetime
 
 from telegram import InlineQueryResultArticle, ParseMode, Update, \
-    InlineQueryResultCachedPhoto, Bot
+    InlineQueryResultCachedPhoto, Bot, InputMessageContent, \
+    InputTextMessageContent
 from telegram.ext import Updater, InlineQueryHandler, CommandHandler, \
     CallbackQueryHandler, MessageHandler, Filters, CallbackContext
 
 from config import token, god_chat_id
 from nt_list import NotetonList
+from nt_list_item_article import NotetonListItemArticle
 from nt_list_item_photo import NotetonListItemPhoto
 from nt_state import NotetonState
 from nt_user import NotetonUser
@@ -33,6 +35,8 @@ def callback_query_handler(update: Update, context: CallbackContext):
         msg = process_create_list_state(text, user)
     elif user.get_state() == NotetonState.ADD_PHOTO:
         msg = process_add_photo_state(text, user)
+    elif user.get_state() == NotetonState.ADD_ARTICLE:
+        msg = process_add_article_state(text, user)
     else:
         if text.endswith(NotetonList.EDIT_COMMAND):
             msg = process_edit_list_state(text, user)
@@ -90,6 +94,20 @@ def process_add_photo_state(text: str, user: NotetonUser):
         return f'Wrong list, please, use buttons'
 
 
+def process_add_article_state(text: str, user: NotetonUser):
+    lists = NotetonUsersManager.get_lists_of_user(user.user_id)
+    if text in [x.list_name for x in lists]:
+        list_ = NotetonUsersManager.get_list_of_user_by_name(user.user_id, text)
+        user.tmp_item.list_id = list_.id
+        NotetonUsersManager.add_article_to_list(user.tmp_item)
+        user.set_state(NotetonState.MAIN_MENU)
+        return f'Article added to list {text}, you can get whole list via ' \
+               f'@noteton_bot {text}'
+
+    else:
+        return f'Wrong list, please, use buttons'
+
+
 def process_create_list_state(text: str, user: NotetonUser):
     types = NotetonList.get_types()
     if text in types:
@@ -104,18 +122,27 @@ def process_create_list_state(text: str, user: NotetonUser):
 def inline_query(update: Update, context: CallbackContext):
     """Handle the inline query."""
     query = update.inline_query.query
-    user_id = update.effective_user.id
-    nt_list = NotetonUsersManager.get_list_of_user_by_name(user_id, query)
+    user = NotetonUsersManager.get_user(update.effective_user.id)
+    nt_list = NotetonUsersManager.get_list_of_user_by_name(user.user_id, query)
     if nt_list:
-        items = NotetonUsersManager.get_items_of_list(user_id, nt_list)
+        items = NotetonUsersManager.get_items_of_list(user.user_id, nt_list)
         answer_items = []
-        if items:
-            for item in items:
-                # url = NotetonS3Manager().generate_pre_signed_url(item.key)
-                id_ = item.id
-                item = InlineQueryResultCachedPhoto(id=id_,
-                                                    photo_file_id=item.file_id)
-                answer_items.append(item)
+        if nt_list.type == NotetonList.TYPE_ARTICLE:
+            if items:
+                for item in items:
+                    id_ = item.id
+                    item = InlineQueryResultArticle(id=id_,
+                                                    title=item.text,
+                                                    input_message_content=InputTextMessageContent(item.text))
+                    answer_items.append(item)
+        elif nt_list.type == NotetonList.TYPE_IMAGES:
+            if items:
+                for item in items:
+                    id_ = item.id
+                    item = InlineQueryResultCachedPhoto(id=id_,
+                                                        photo_file_id=item.file_id)
+                    answer_items.append(item)
+        user.set_state(NotetonState.NO_ANSWER)
         update.inline_query.answer(answer_items, cache_time=5, is_personal=True,
                                    timeout=300)
 
@@ -139,6 +166,8 @@ def message_handler(update: Update, context: CallbackContext):
         info_and_help(update, context)
     elif text == 'Send feedback':
         feedback(update, context)
+    elif user.get_state() == NotetonState.NO_ANSWER:
+        user.set_state(NotetonState.MAIN_MENU)
     elif user.get_state() == NotetonState.CREATE_LIST_NAME:
         reply_markup = generate_list_types_buttons()
         msg = process_create_list(chat_id, context, text, user)
@@ -150,6 +179,23 @@ def message_handler(update: Update, context: CallbackContext):
                                text,
                                context.bot,
                                user)
+    elif user.get_state() == NotetonState.MAIN_MENU:
+        item = NotetonListItemArticle(user_id=user_id,
+                                      text=text)
+
+        user = NotetonUsersManager.get_user(user_id)
+        user.tmp_item = item
+        user.set_state(NotetonState.ADD_ARTICLE)
+        lists = NotetonUsersManager.get_lists_of_user_by_type(user_id,
+                                                              NotetonList.TYPE_ARTICLE)
+        if not lists:
+            context.bot.send_message(chat_id=chat_id,
+                                     text=f'Oops, you have no lists with '
+                                          f'articles, please, create at '
+                                          f'least one first')
+            return
+        reply_markup = generate_lists_buttons(lists)
+        msg = 'Choose the list:'
     if msg:
         context.bot.send_message(chat_id=chat_id,
                                  text=msg,
@@ -223,14 +269,17 @@ def process_create_list(chat_id, context, list_name, user):
 def photo_handler(update: Update, context: CallbackContext):
     photo_id = update.message.photo[-1].file_id
     user_id = update.effective_user.id
+    user = NotetonUsersManager.get_user(user_id)
+    if user.get_state() == NotetonState.NO_ANSWER:
+        user.set_state(NotetonState.MAIN_MENU)
+        return
+
     chat_id = update.message.chat_id
     new_file = context.bot.get_file(photo_id)
     byte_array = new_file.download_as_bytearray()
     item = NotetonListItemPhoto(user_id=user_id,
                                 file_id=photo_id,
                                 obj=byte_array)
-
-    user = NotetonUsersManager.get_user(user_id)
     user.tmp_item = item
     user.set_state(NotetonState.ADD_PHOTO)
     lists = NotetonUsersManager.get_lists_of_user_by_type(user_id,
@@ -245,6 +294,10 @@ def photo_handler(update: Update, context: CallbackContext):
     context.bot.send_message(chat_id=chat_id,
                              text=f'Choose the list:',
                              reply_markup=reply_markup)
+
+
+def sticker_handler(update: Update, context: CallbackContext):
+    pass
 
 
 def start(update: Update, context: CallbackContext):
@@ -321,6 +374,7 @@ def main():
     dp.add_handler(CallbackQueryHandler(callback_query_handler))
     dp.add_handler(MessageHandler(Filters.text, message_handler))
     dp.add_handler(MessageHandler(Filters.photo, photo_handler))
+    dp.add_handler(MessageHandler(Filters.sticker, sticker_handler))
 
     updater.start_polling()
     updater.idle()
