@@ -5,7 +5,8 @@ from telegram import InlineQueryResultArticle, ParseMode, Update, \
     InlineQueryResultCachedPhoto, Bot, InputMessageContent, \
     InputTextMessageContent
 from telegram.ext import Updater, InlineQueryHandler, CommandHandler, \
-    CallbackQueryHandler, MessageHandler, Filters, CallbackContext
+    CallbackQueryHandler, MessageHandler, Filters, CallbackContext, \
+    ChosenInlineResultHandler
 
 from config import token, god_chat_id
 from nt_list import NotetonList
@@ -131,10 +132,11 @@ def inline_query(update: Update, context: CallbackContext):
             if items:
                 for item in items:
                     id_ = item.id
-                    item = InlineQueryResultArticle(id=id_,
-                                                    title=item.text,
-                                                    input_message_content=InputTextMessageContent(item.text))
-                    answer_items.append(item)
+                    item_ = InlineQueryResultArticle(id=id_,
+                                                     title=item.text,
+                                                     input_message_content=InputTextMessageContent(item.text))
+                    print(id_, item.text)
+                    answer_items.append(item_)
         elif nt_list.type == NotetonList.TYPE_IMAGES:
             if items:
                 for item in items:
@@ -143,6 +145,7 @@ def inline_query(update: Update, context: CallbackContext):
                                                         photo_file_id=item.file_id)
                     answer_items.append(item)
         user.set_state(NotetonState.NO_ANSWER)
+        user.time_inline = datetime.now()
         update.inline_query.answer(answer_items, cache_time=5, is_personal=True,
                                    timeout=300)
 
@@ -166,7 +169,10 @@ def message_handler(update: Update, context: CallbackContext):
         info_and_help(update, context)
     elif text == 'Send feedback':
         feedback(update, context)
-    elif user.get_state() == NotetonState.NO_ANSWER:
+    elif user.get_state() == NotetonState.NO_ANSWER and \
+            user.time_inline is not None and \
+            (datetime.now() - user.time_inline).total_seconds() < \
+            NotetonUsersManager.time_no_answer:
         user.set_state(NotetonState.MAIN_MENU)
     elif user.get_state() == NotetonState.CREATE_LIST_NAME:
         reply_markup = generate_list_types_buttons()
@@ -270,7 +276,12 @@ def photo_handler(update: Update, context: CallbackContext):
     photo_id = update.message.photo[-1].file_id
     user_id = update.effective_user.id
     user = NotetonUsersManager.get_user(user_id)
-    if user.get_state() == NotetonState.NO_ANSWER:
+    logger.debug(f'photo handler, time is {datetime.now()}, total seconds is'
+                 f'{(datetime.now() - user.time_inline).total_seconds()}')
+    if user.get_state() == NotetonState.NO_ANSWER and \
+            user.time_inline is not None and \
+            (datetime.now() - user.time_inline).total_seconds() < \
+            NotetonUsersManager.time_no_answer:
         user.set_state(NotetonState.MAIN_MENU)
         return
 
@@ -360,6 +371,14 @@ def feedback(update: Update, context: CallbackContext):
                              text=f'Send me feedback message:')
 
 
+def chosen_inline_result_handler(update: Update, context: CallbackContext):
+    user_id = update.effective_user.id
+    user = NotetonUsersManager.get_user(user_id)
+    # user.set_state(NotetonState.NO_ANSWER)
+    # user.time_inline = datetime.now()
+    logger.debug(f'chosen inline, user {user.user_id}')
+
+
 def main():
     updater = Updater(token, use_context=True)
     dp = updater.dispatcher
@@ -371,6 +390,7 @@ def main():
     dp.add_handler(CommandHandler("help", info_and_help))
 
     dp.add_handler(InlineQueryHandler(inline_query))
+    dp.add_handler(ChosenInlineResultHandler(chosen_inline_result_handler))
     dp.add_handler(CallbackQueryHandler(callback_query_handler))
     dp.add_handler(MessageHandler(Filters.text, message_handler))
     dp.add_handler(MessageHandler(Filters.photo, photo_handler))

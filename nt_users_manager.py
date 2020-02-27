@@ -12,6 +12,8 @@ class NotetonUsersManager:
 
     instance = None
 
+    time_no_answer = 10
+
     class __NotetonUsersManager:
         def __init__(self):
             self.users = {}
