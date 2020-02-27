@@ -3,7 +3,8 @@ from datetime import datetime
 from typing import List
 
 from telegram import InlineQueryResultArticle, ParseMode, Update, \
-    InlineQueryResultCachedPhoto, InputTextMessageContent, InlineQueryResult, InlineQueryResultCachedSticker
+    InlineQueryResultCachedPhoto, InputTextMessageContent, InlineQueryResult, InlineQueryResultCachedSticker, \
+    InlineQueryResultCachedGif
 from telegram.ext import Updater, InlineQueryHandler, CommandHandler, \
     CallbackQueryHandler, MessageHandler, Filters, CallbackContext, \
     ChosenInlineResultHandler
@@ -11,7 +12,7 @@ from telegram.ext import Updater, InlineQueryHandler, CommandHandler, \
 from config import token, god_chat_id
 from nt_list import NotetonList
 from nt_list_item_article import NotetonListItemArticle
-from nt_list_item_photo import NotetonListItemFile
+from nt_list_item_file import NotetonListItemFile
 from nt_state import NotetonState
 from nt_user import NotetonUser
 
@@ -80,12 +81,15 @@ def get_list_items_by_type(nt_list: NotetonList,
             item_ = InlineQueryResultArticle(id=id_,
                                              title=item.text,
                                              input_message_content=ans_text)
-        elif nt_list.type == NotetonList.TYPE_IMAGES:
+        elif nt_list.type == NotetonList.TYPE_IMAGE:
             item_ = InlineQueryResultCachedPhoto(id=id_,
                                                  photo_file_id=item.file_id)
-        elif nt_list.type == NotetonList.TYPE_STICKERS:
+        elif nt_list.type == NotetonList.TYPE_STICKER:
             item_ = InlineQueryResultCachedSticker(id=id_,
                                                    sticker_file_id=item.file_id)
+        elif nt_list.type == NotetonList.TYPE_GIF:
+            item_ = InlineQueryResultCachedGif(id=id_,
+                                               gif_file_id=item.file_id)
         if item_:
             answer_items.append(item_)
     return answer_items
@@ -155,7 +159,7 @@ def photo_handler(update: Update, context: CallbackContext):
     user.tmp_item = item
     user.set_state(NotetonState.ADD_FILE)
     lists = NotetonUsersManager.get_lists_of_user_by_type(user_id,
-                                                          NotetonList.TYPE_IMAGES)
+                                                          NotetonList.TYPE_IMAGE)
     if not lists:
         context.bot.send_message(chat_id=chat_id,
                                  text=f'Oops, you have no lists with images,'
@@ -186,7 +190,7 @@ def sticker_handler(update: Update, context: CallbackContext):
     user.tmp_item = item
     user.set_state(NotetonState.ADD_FILE)
     lists = NotetonUsersManager.get_lists_of_user_by_type(user_id,
-                                                          NotetonList.TYPE_STICKERS)
+                                                          NotetonList.TYPE_STICKER)
     if not lists:
         context.bot.send_message(chat_id=chat_id,
                                  text=f'Oops, you have no lists with stickers,'
@@ -197,6 +201,41 @@ def sticker_handler(update: Update, context: CallbackContext):
     context.bot.send_message(chat_id=chat_id,
                              text=f'Choose the list:',
                              reply_markup=reply_markup)
+
+
+def gif_handler(update: Update, context: CallbackContext):
+    logger.info(f'GIF handler')
+    gif_id = update.message.animation.file_id
+    user_id = update.effective_user.id
+    user = NotetonUsersManager.get_user(user_id)
+    if user.get_state() == NotetonState.NO_ANSWER and \
+            user.time_inline is not None and \
+            (datetime.now() - user.time_inline).total_seconds() < \
+            NotetonUsersManager.time_no_answer:
+        user.set_state(NotetonState.MAIN_MENU)
+        return
+
+    chat_id = update.message.chat_id
+    item = NotetonListItemFile(user_id=user_id,
+                               file_id=gif_id)
+    user.tmp_item = item
+    user.set_state(NotetonState.ADD_FILE)
+    lists = NotetonUsersManager.get_lists_of_user_by_type(user_id,
+                                                          NotetonList.TYPE_GIF)
+    if not lists:
+        context.bot.send_message(chat_id=chat_id,
+                                 text=f'Oops, you have no lists with gifs,'
+                                      f'please, create at least one first')
+        return
+    reply_markup = generate_lists_buttons(lists)
+
+    context.bot.send_message(chat_id=chat_id,
+                             text=f'Choose the list:',
+                             reply_markup=reply_markup)
+
+
+def test_handler(update: Update, context: CallbackContext):
+    logger.info(f'Sticker handler')
 
 
 def start(update: Update, context: CallbackContext):
@@ -283,6 +322,8 @@ def main():
     dp.add_handler(MessageHandler(Filters.text, message_handler))
     dp.add_handler(MessageHandler(Filters.photo, photo_handler))
     dp.add_handler(MessageHandler(Filters.sticker, sticker_handler))
+    dp.add_handler(MessageHandler(Filters.animation, gif_handler))
+    dp.add_handler(MessageHandler(Filters.all, test_handler))
 
     updater.start_polling()
     updater.idle()

@@ -3,7 +3,7 @@ from typing import List
 from nt_database import NotetonDatabaseManager
 from nt_list import NotetonList
 from nt_list_item_article import NotetonListItemArticle
-from nt_list_item_photo import NotetonListItemFile
+from nt_list_item_file import NotetonListItemFile
 from nt_s3_manager import NotetonS3Manager
 from nt_user import NotetonUser
 
