@@ -5,9 +5,14 @@ from uuid import uuid4
 class NotetonList:
     TYPE_IMAGES = 'type_images'
     TYPE_ARTICLE = 'type_articles'
+    TYPE_STICKERS = 'type_stickers'
 
     EDIT_COMMAND = '*edit*'
     DELETE_COMMAND = '*delete*'
+
+    @classmethod
+    def get_types(cls):
+        return [cls.TYPE_IMAGES, cls.TYPE_ARTICLE, cls.TYPE_STICKERS]
 
     def __init__(self, user_id: str,
                  list_name: str,
@@ -49,10 +54,6 @@ class NotetonList:
                               'numbers and underscore _'
 
         return True, 'Ok'
-
-    @classmethod
-    def get_types(cls):
-        return [cls.TYPE_IMAGES, cls.TYPE_ARTICLE]
 
 
 if __name__ == '__main__':

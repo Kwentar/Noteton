@@ -6,7 +6,7 @@ from boto3.dynamodb.conditions import Key, Attr
 
 from nt_list import NotetonList
 from nt_list_item_article import NotetonListItemArticle
-from nt_list_item_photo import NotetonListItemPhoto
+from nt_list_item_photo import NotetonListItemFile
 from nt_user import NotetonUser
 
 
@@ -80,12 +80,11 @@ class NotetonDatabaseManager:
         nt_items = []
         for item in items:
             nt_item = None
-            if nt_list.type == NotetonList.TYPE_IMAGES:
-                nt_item = NotetonListItemPhoto(user_id=user_id,
-                                               list_id=nt_list.id,
-                                               id_=item['item_id'],
-                                               file_id=item['file_id'],
-                                               key=item['key'])
+            if nt_list.type in [NotetonList.TYPE_IMAGES, NotetonList.TYPE_STICKERS]:
+                nt_item = NotetonListItemFile(user_id=user_id,
+                                              list_id=nt_list.id,
+                                              id_=item['item_id'],
+                                              file_id=item['file_id'])
             elif nt_list.type == NotetonList.TYPE_ARTICLE:
                 nt_item = NotetonListItemArticle(user_id=user_id,
                                                  list_id=nt_list.id,
