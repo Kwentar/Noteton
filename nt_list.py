@@ -10,6 +10,7 @@ class NotetonList:
 
     EDIT_COMMAND = '*edit*'
     DELETE_COMMAND = '*delete*'
+    DELETE_ITEM_COMMAND = '*delete_item*'
 
     @classmethod
     def get_types(cls):

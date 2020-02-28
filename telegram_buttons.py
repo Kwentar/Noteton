@@ -43,6 +43,7 @@ def generate_buttons_my_lists(nt_lists):
     button_list = []
     edit = NotetonList.EDIT_COMMAND
     delete = NotetonList.DELETE_COMMAND
+    del_item = NotetonList.DELETE_ITEM_COMMAND
     for nt_list in nt_lists:
         name = nt_list.list_name
         button = [InlineKeyboardButton(name,
@@ -50,7 +51,9 @@ def generate_buttons_my_lists(nt_lists):
                   InlineKeyboardButton('edit',
                                        callback_data=f'{name}{edit}'),
                   InlineKeyboardButton('delete',
-                                       callback_data=f'{name}{delete}')
+                                       callback_data=f'{name}{delete}'),
+                  InlineKeyboardButton('delete item',
+                                       switch_inline_query_current_chat=f'{name}{del_item}')
                   ]
         button_list.append(button)
     reply_markup = InlineKeyboardMarkup(button_list)

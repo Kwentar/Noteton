@@ -3,7 +3,8 @@ from datetime import datetime
 from typing import List
 
 from telegram import InlineQueryResultArticle, ParseMode, Update, \
-    InlineQueryResultCachedPhoto, InputTextMessageContent, InlineQueryResult, InlineQueryResultCachedSticker, \
+    InlineQueryResultCachedPhoto, InputTextMessageContent, InlineQueryResult, \
+    InlineQueryResultCachedSticker, \
     InlineQueryResultCachedGif
 from telegram.ext import Updater, InlineQueryHandler, CommandHandler, \
     CallbackQueryHandler, MessageHandler, Filters, CallbackContext, \
@@ -17,8 +18,10 @@ from nt_state import NotetonState
 from nt_user import NotetonUser
 
 from nt_users_manager import NotetonUsersManager
-from process_states import process_feedback, process_edit_list, process_create_list, process_text_message_main_menu, \
-    process_delete_list_state, process_create_list_state, process_add_file_state, process_add_article_state, \
+from process_states import process_feedback, process_edit_list, \
+    process_create_list, process_text_message_main_menu, \
+    process_delete_list_state, process_create_list_state, \
+    process_add_file_state, process_add_article_state, \
     process_edit_list_state
 from telegram_buttons import generate_list_types_buttons, \
     generate_lists_buttons, generate_main_menu, generate_buttons_my_lists
@@ -60,13 +63,37 @@ def inline_query(update: Update, context: CallbackContext):
     """Handle the inline query."""
     query = update.inline_query.query
     user = NotetonUsersManager.get_user(update.effective_user.id)
-    nt_list = NotetonUsersManager.get_list_of_user_by_name(user.user_id, query)
-    if nt_list:
+    if query.endswith(NotetonList.DELETE_ITEM_COMMAND):
+        query = query[:query.index(NotetonList.DELETE_ITEM_COMMAND)]
+    logger.info(f'inline query with query {query}')
+    nt_lists = NotetonUsersManager.get_lists_of_user(user.user_id)
+    nt_lists = list(filter(lambda x: x.list_name.startswith(query), nt_lists))
+    if len(nt_lists) > 1:
+        answer_items = []
+        for nt_list in nt_lists:
+            ans_text = InputTextMessageContent(nt_list.list_name)
+            item_ = InlineQueryResultArticle(id=nt_list.id,
+                                             title=nt_list.list_name,
+                                             input_message_content=ans_text)
+            answer_items.append(item_)
+    elif len(nt_lists) == 1:
+        nt_list = nt_lists[0]
         answer_items = get_list_items_by_type(nt_list, user)
         user.set_state(NotetonState.NO_ANSWER)
         user.time_inline = datetime.now()
-        update.inline_query.answer(answer_items, cache_time=5, is_personal=True,
-                                   timeout=300)
+    else:
+        ans_text = InputTextMessageContent(message_text='No lists')
+
+        answer_items = [
+            InlineQueryResultArticle(id='no_id',
+                                     title='No lists with this name',
+                                     input_message_content=ans_text,
+                                     description='You have no lists with this '
+                                                 'name, press "My lists" for '
+                                                 'all lists')
+        ]
+    update.inline_query.answer(answer_items, cache_time=5,
+                               is_personal=True, timeout=300)
 
 
 def get_list_items_by_type(nt_list: NotetonList,
@@ -144,7 +171,8 @@ def photo_handler(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     user = NotetonUsersManager.get_user(user_id)
     if user.time_inline:
-        logger.debug(f'photo handler, time is {datetime.now()}, total seconds is'
+        logger.debug(f'photo handler, time is {datetime.now()}, '
+                     f'total seconds is'
                      f'{(datetime.now() - user.time_inline).total_seconds()}')
     if user.get_state() == NotetonState.NO_ANSWER and \
             user.time_inline is not None and \
@@ -235,7 +263,7 @@ def gif_handler(update: Update, context: CallbackContext):
 
 
 def test_handler(update: Update, context: CallbackContext):
-    logger.info(f'Sticker handler')
+    logger.info(f'Test handler')
 
 
 def start(update: Update, context: CallbackContext):
@@ -299,11 +327,18 @@ def feedback(update: Update, context: CallbackContext):
 
 
 def chosen_inline_result_handler(update: Update, context: CallbackContext):
-    user_id = update.effective_user.id
-    user = NotetonUsersManager.get_user(user_id)
-    # user.set_state(NotetonState.NO_ANSWER)
-    # user.time_inline = datetime.now()
-    logger.debug(f'chosen inline, user {user.user_id}')
+    query = update.chosen_inline_result.query
+    if query.endswith(NotetonList.DELETE_ITEM_COMMAND):
+        user = NotetonUsersManager.get_user(update.effective_user.id)
+        list_name = query[:query.index(NotetonList.DELETE_ITEM_COMMAND)]
+        logger.info(f'chosen_inline_result_handler with query {query}')
+        nt_list = NotetonUsersManager.get_list_of_user_by_name(user.user_id,
+                                                               list_name)
+        item_id = update.chosen_inline_result.result_id
+        NotetonUsersManager.delete_list_item(nt_list.id, item_id)
+
+        logger.debug(f'chosen inline, user {user.user_id}')
+        user.set_state(NotetonState.MAIN_MENU)
 
 
 def main():

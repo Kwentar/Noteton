@@ -4,7 +4,6 @@ from nt_database import NotetonDatabaseManager
 from nt_list import NotetonList
 from nt_list_item_article import NotetonListItemArticle
 from nt_list_item_file import NotetonListItemFile
-from nt_s3_manager import NotetonS3Manager
 from nt_user import NotetonUser
 
 
@@ -18,7 +17,6 @@ class NotetonUsersManager:
         def __init__(self):
             self.users = {}
             self.db = NotetonDatabaseManager()
-            self.s3 = NotetonS3Manager()
 
         def __str__(self):
             return f'NotetonUsersManager'
@@ -34,10 +32,10 @@ class NotetonUsersManager:
         return getattr(self.instance, name)
 
     @staticmethod
-    def __fix_user_id(user_id):
-        if not isinstance(user_id, str):
-            user_id = str(user_id)
-        return user_id
+    def __fix_id_type(id_):
+        if not isinstance(id_, str):
+            id_ = str(id_)
+        return id_
 
     @classmethod
     def init_instance(cls):
@@ -46,30 +44,36 @@ class NotetonUsersManager:
 
     @classmethod
     def get_user(cls, user_id: str) -> NotetonUser:
-        user_id = cls.__fix_user_id(user_id)
+        user_id = cls.__fix_id_type(user_id)
         if user_id not in cls.instance.users:
             cls.instance.add_user(user_id)
         return cls.instance.users[user_id]
 
     @classmethod
     def add_list_to_user(cls, user_id: str, nt_list: NotetonList):
-        user_id = cls.__fix_user_id(user_id)
+        user_id = cls.__fix_id_type(user_id)
         cls.instance.db.create_list(user_id, nt_list)
 
     @classmethod
     def get_lists_of_user(cls, user_id: str) -> List[NotetonList]:
-        user_id = cls.__fix_user_id(user_id)
+        user_id = cls.__fix_id_type(user_id)
         return cls.instance.db.get_lists_of_user(user_id)
 
     @classmethod
     def change_list_name(cls, user_id: str, nt_list: NotetonList):
-        user_id = cls.__fix_user_id(user_id)
+        user_id = cls.__fix_id_type(user_id)
         return cls.instance.db.create_list(user_id, nt_list)
 
     @classmethod
     def delete_list(cls, user_id: str, nt_list: NotetonList):
-        user_id = cls.__fix_user_id(user_id)
+        user_id = cls.__fix_id_type(user_id)
         return cls.instance.db.delete_list(user_id, nt_list.id)
+
+    @classmethod
+    def delete_list_item(cls, list_id: str, item_id: str):
+        list_id = cls.__fix_id_type(list_id)
+        item_id = cls.__fix_id_type(item_id)
+        return cls.instance.db.delete_list_item(list_id, item_id)
 
     @classmethod
     def get_list_of_user_by_name(cls,

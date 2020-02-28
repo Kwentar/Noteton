@@ -11,6 +11,7 @@ class NotetonState:
     ADD_FILE = 'ADD_FILE'
     ADD_ARTICLE = 'ADD_ARTICLE'
     NO_ANSWER = 'NO_ANSWER'
+    DELETE_ITEM = 'DELETE_ITEM'
 
     def __init__(self):
         self.state = NotetonState.MAIN_MENU

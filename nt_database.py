@@ -63,8 +63,17 @@ class NotetonDatabaseManager:
         return response
 
     def delete_list(self, user_id, list_id):
+        items = self.list_item_table.query(
+            KeyConditionExpression=Key('list_id').eq(list_id))['Items']
+        for item in items:
+            self.delete_list_item(list_id, item['item_id'])
         response = self.list_table.delete_item(Key={'user_id': user_id,
                                                     'list_id': list_id})
+        return response
+
+    def delete_list_item(self, list_id, item_id):
+        response = self.list_item_table.delete_item(Key={'list_id': list_id,
+                                                         'item_id': item_id})
         return response
 
     def add_item(self, item):
