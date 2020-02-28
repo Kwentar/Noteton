@@ -3,7 +3,7 @@ from typing import List
 from nt_database import NotetonDatabaseManager
 from nt_list import NotetonList
 from nt_list_item_article import NotetonListItemArticle
-from nt_list_item_photo import NotetonListItemPhoto
+from nt_list_item_file import NotetonListItemFile
 from nt_s3_manager import NotetonS3Manager
 from nt_user import NotetonUser
 
@@ -11,6 +11,8 @@ from nt_user import NotetonUser
 class NotetonUsersManager:
 
     instance = None
+
+    time_no_answer = 10
 
     class __NotetonUsersManager:
         def __init__(self):
@@ -85,13 +87,12 @@ class NotetonUsersManager:
         return filtered_list
 
     @classmethod
-    def add_photo_to_list(cls, item: NotetonListItemPhoto):
+    def add_file_to_list(cls, item: NotetonListItemFile):
         """
-        Add photo to database and to s3 bucket
+        Add file to database
         :param item: item to add
         :return: response from db
         """
-        cls.instance.s3.put_image(item.user_id, item.list_id, item.id, item.obj)
         return cls.instance.db.add_item(item)
 
     @classmethod
