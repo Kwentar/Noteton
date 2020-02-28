@@ -79,7 +79,6 @@ def inline_query(update: Update, context: CallbackContext):
     elif len(nt_lists) == 1:
         nt_list = nt_lists[0]
         answer_items = get_list_items_by_type(nt_list, user)
-        user.set_state(NotetonState.NO_ANSWER)
         user.time_inline = datetime.now()
     else:
         ans_text = InputTextMessageContent(message_text='No lists')
@@ -92,6 +91,7 @@ def inline_query(update: Update, context: CallbackContext):
                                                  'name, press "My lists" for '
                                                  'all lists')
         ]
+    user.set_state(NotetonState.NO_ANSWER)
     update.inline_query.answer(answer_items, cache_time=5,
                                is_personal=True, timeout=300)
 
