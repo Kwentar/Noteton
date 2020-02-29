@@ -22,20 +22,23 @@ def process_delete_list_state(text: str, user: NotetonUser):
     list_name = text[:len(text) - len(NotetonList.DELETE_COMMAND)]
     user.tmp_list = NotetonUsersManager.get_list_of_user_by_name(user.user_id,
                                                                  list_name)
+    result = False
     if user.tmp_list is None:
         logger.error(f'list {list_name} of user {user.user_id} not '
                      f'found in process_delete_list_command')
-        return f'I guess you are trying to delete nonexistent list 🤔'
+        msg = f'I guess you are trying to delete nonexistent list 🤔'
     else:
         user.set_state(NotetonState.MAIN_MENU)
         res = NotetonUsersManager.delete_list(user.user_id, user.tmp_list)
         if res['ResponseMetadata']['HTTPStatusCode'] == 200:
-            return f'list {list_name} has been deleted'
+            msg = f'list {list_name} has been deleted'
+            result = True
         else:
             logger.warning(f'Problem with deleting {list_name} of user '
                            f'{user.user_id}, resp code is '
                            f'{res["ResponseMetadata"]["HTTPStatusCode"]}')
-            return f'Something bad happened, we will check it!'
+            msg = f'Something bad happened, we will check it!'
+    return msg, result
 
 
 def process_add_file_state(text: str, user: NotetonUser):
@@ -122,8 +125,8 @@ def process_edit_list(new_list_name: str,
         NotetonUsersManager.change_list_name(user.user_id,
                                              user.tmp_list)
 
-        msg = f'The list name has been changed ✅'
-    return msg
+        msg = None
+    return msg, val_result
 
 
 def process_create_list(list_name, user):

@@ -48,11 +48,11 @@ def generate_buttons_my_lists(nt_lists):
         name = nt_list.list_name
         button = [InlineKeyboardButton(name,
                                        switch_inline_query_current_chat=name),
-                  InlineKeyboardButton('edit',
+                  InlineKeyboardButton('✏',
                                        callback_data=f'{name}{edit}'),
-                  InlineKeyboardButton('delete',
+                  InlineKeyboardButton('❌',
                                        callback_data=f'{name}{delete}'),
-                  InlineKeyboardButton('delete item',
+                  InlineKeyboardButton('❌ item',
                                        switch_inline_query_current_chat=f'{name}{del_item}')
                   ]
         button_list.append(button)
