@@ -5,7 +5,7 @@ from typing import List
 from telegram import InlineQueryResultArticle, ParseMode, Update, \
     InlineQueryResultCachedPhoto, InputTextMessageContent, InlineQueryResult, \
     InlineQueryResultCachedSticker, \
-    InlineQueryResultCachedGif
+    InlineQueryResultCachedGif, InlineQueryResultCachedAudio
 from telegram.ext import Updater, InlineQueryHandler, CommandHandler, \
     CallbackQueryHandler, MessageHandler, Filters, CallbackContext, \
     ChosenInlineResultHandler
@@ -35,6 +35,7 @@ logger = logging.getLogger('NOTETON MAIN')
 
 def callback_query_handler(update: Update, context: CallbackContext):
     callback_query_id = update.callback_query.id
+    chat_id = update.callback_query.message.chat_id
     user = NotetonUsersManager.get_user(update.effective_user.id)
     text = update.callback_query.data
     logger.info(f'message in callback_query {text}')
@@ -50,7 +51,14 @@ def callback_query_handler(update: Update, context: CallbackContext):
             msg = process_edit_list_state(text, user)
             show_alert = True
         elif text.endswith(NotetonList.DELETE_COMMAND):
-            msg = process_delete_list_state(text, user)
+            msg, result = process_delete_list_state(text, user)
+            if result:
+                nt_lists = NotetonUsersManager.get_lists_of_user(user.user_id)
+                reply_markup = generate_buttons_my_lists(nt_lists)
+                context.bot.edit_message_reply_markup(chat_id=chat_id,
+                                                      message_id=user.lists_message_id,
+                                                      reply_markup=reply_markup)
+
         else:
             msg = 'Unexpected command'
 
@@ -117,6 +125,9 @@ def get_list_items_by_type(nt_list: NotetonList,
         elif nt_list.type == NotetonList.TYPE_GIF:
             item_ = InlineQueryResultCachedGif(id=id_,
                                                gif_file_id=item.file_id)
+        elif nt_list.type == NotetonList.TYPE_AUDIO:
+            item_ = InlineQueryResultCachedAudio(id=id_,
+                                                 audio_file_id=item.file_id)
         if item_:
             answer_items.append(item_)
     return answer_items
@@ -150,7 +161,14 @@ def message_handler(update: Update, context: CallbackContext):
         reply_markup = generate_list_types_buttons()
         msg = process_create_list(text, user)
     elif user.get_state() == NotetonState.EDIT_LIST:
-        msg = process_edit_list(text, user)
+        msg, result = process_edit_list(text, user)
+        if result:
+            nt_lists = NotetonUsersManager.get_lists_of_user(user.user_id)
+            reply_markup = generate_buttons_my_lists(nt_lists)
+            context.bot.edit_message_reply_markup(chat_id=chat_id,
+                                                  message_id=user.lists_message_id,
+                                                  reply_markup=reply_markup)
+            context.bot.delete_message(chat_id, update.message.message_id)
     elif user.get_state() == NotetonState.FEEDBACK:
         msg, feedback_msg = process_feedback(update.effective_user.username,
                                              update.effective_user.full_name,
@@ -253,7 +271,38 @@ def gif_handler(update: Update, context: CallbackContext):
     if not lists:
         context.bot.send_message(chat_id=chat_id,
                                  text=f'Oops, you have no lists with gifs,'
-                                      f'please, create at least one first')
+                                      f' please, create at least one first')
+        return
+    reply_markup = generate_lists_buttons(lists)
+
+    context.bot.send_message(chat_id=chat_id,
+                             text=f'Choose the list:',
+                             reply_markup=reply_markup)
+
+
+def audio_handler(update: Update, context: CallbackContext):
+    logger.info(f'Audio handler')
+    audio_id = update.message.audio.file_id
+    user_id = update.effective_user.id
+    user = NotetonUsersManager.get_user(user_id)
+    if user.get_state() == NotetonState.NO_ANSWER and \
+            user.time_inline is not None and \
+            (datetime.now() - user.time_inline).total_seconds() < \
+            NotetonUsersManager.time_no_answer:
+        user.set_state(NotetonState.MAIN_MENU)
+        return
+
+    chat_id = update.message.chat_id
+    item = NotetonListItemFile(user_id=user_id,
+                               file_id=audio_id)
+    user.tmp_item = item
+    user.set_state(NotetonState.ADD_FILE)
+    lists = NotetonUsersManager.get_lists_of_user_by_type(user_id,
+                                                          NotetonList.TYPE_AUDIO)
+    if not lists:
+        context.bot.send_message(chat_id=chat_id,
+                                 text=f'Oops, you have no lists with audios,'
+                                      f' please, create at least one first')
         return
     reply_markup = generate_lists_buttons(lists)
 
@@ -304,7 +353,9 @@ def my_lists(update: Update, context: CallbackContext):
     reply_markup = generate_buttons_my_lists(nt_lists)
 
     msg = context.bot.send_message(chat_id=chat_id,
-                                   text=f'Your lists:',
+                                   text=f'Your lists:\n'
+                                        f'✏ - edit list name\n'
+                                        f'❌ - delete',
                                    reply_markup=reply_markup)
     user.lists_message_id = msg.message_id
 
@@ -324,6 +375,15 @@ def feedback(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     context.bot.send_message(chat_id=chat_id,
                              text=f'Send me feedback message:')
+
+
+def get_stat(update: Update, context: CallbackContext):
+    user = NotetonUsersManager.get_user(update.effective_user.id)
+    logger.info(f'get_stat command form  {user.user_id}')
+    if str(update.message.chat_id) == god_chat_id:
+        users = NotetonUsersManager.get_users()
+        context.bot.send_message(chat_id=god_chat_id,
+                                 text=f'We have {len(users)} users')
 
 
 def chosen_inline_result_handler(update: Update, context: CallbackContext):
@@ -349,6 +409,7 @@ def main():
     dp.add_handler(CommandHandler("my_lists", my_lists))
     dp.add_handler(CommandHandler("info_and_help", info_and_help))
     dp.add_handler(CommandHandler("send_feedback", feedback))
+    dp.add_handler(CommandHandler("stat", get_stat))
     dp.add_handler(CommandHandler("help", info_and_help))
 
     dp.add_handler(InlineQueryHandler(inline_query))
@@ -358,6 +419,7 @@ def main():
     dp.add_handler(MessageHandler(Filters.photo, photo_handler))
     dp.add_handler(MessageHandler(Filters.sticker, sticker_handler))
     dp.add_handler(MessageHandler(Filters.animation, gif_handler))
+    dp.add_handler(MessageHandler(Filters.audio, audio_handler))
     dp.add_handler(MessageHandler(Filters.all, test_handler))
 
     updater.start_polling()

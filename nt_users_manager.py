@@ -50,6 +50,10 @@ class NotetonUsersManager:
         return cls.instance.users[user_id]
 
     @classmethod
+    def get_users(cls) -> List[NotetonUser]:
+        return cls.instance.users
+
+    @classmethod
     def add_list_to_user(cls, user_id: str, nt_list: NotetonList):
         user_id = cls.__fix_id_type(user_id)
         cls.instance.db.create_list(user_id, nt_list)

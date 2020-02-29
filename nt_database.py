@@ -91,7 +91,8 @@ class NotetonDatabaseManager:
             nt_item = None
             if nt_list.type in [NotetonList.TYPE_IMAGE,
                                 NotetonList.TYPE_STICKER,
-                                NotetonList.TYPE_GIF]:
+                                NotetonList.TYPE_GIF,
+                                NotetonList.TYPE_AUDIO]:
                 nt_item = NotetonListItemFile(user_id=user_id,
                                               list_id=nt_list.id,
                                               id_=item['item_id'],
