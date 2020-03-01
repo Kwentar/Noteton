@@ -92,11 +92,14 @@ class NotetonDatabaseManager:
             if nt_list.type in [NotetonList.TYPE_IMAGE,
                                 NotetonList.TYPE_STICKER,
                                 NotetonList.TYPE_GIF,
-                                NotetonList.TYPE_AUDIO]:
+                                NotetonList.TYPE_AUDIO,
+                                NotetonList.TYPE_DOCUMENT]:
                 nt_item = NotetonListItemFile(user_id=user_id,
                                               list_id=nt_list.id,
                                               id_=item['item_id'],
                                               file_id=item['file_id'])
+                if 'title' in item:
+                    nt_item.title = item['title']
             elif nt_list.type == NotetonList.TYPE_ARTICLE:
                 nt_item = NotetonListItemArticle(user_id=user_id,
                                                  list_id=nt_list.id,

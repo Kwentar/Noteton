@@ -49,10 +49,10 @@ def process_add_file_state(text: str, user: NotetonUser):
         NotetonUsersManager.add_file_to_list(user.tmp_item)
         user.set_state(NotetonState.MAIN_MENU)
         return f'File added to list {text}, you can get whole list via ' \
-               f'@noteton_bot {text}'
+               f'@noteton_bot {text}', True
 
     else:
-        return f'Wrong list, please, use buttons'
+        return f'Wrong list, please, use buttons', False
 
 
 def process_add_article_state(text: str, user: NotetonUser):

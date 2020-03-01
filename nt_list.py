@@ -8,6 +8,7 @@ class NotetonList:
     TYPE_STICKER = 'type_stickers'
     TYPE_GIF = 'type_gifs'
     TYPE_AUDIO = 'type_audios'
+    TYPE_DOCUMENT = 'type_documents'
 
     EDIT_COMMAND = '*edit*'
     DELETE_COMMAND = '*delete*'
@@ -15,8 +16,8 @@ class NotetonList:
 
     @classmethod
     def get_types(cls):
-        return [cls.TYPE_IMAGE, cls.TYPE_ARTICLE,
-                cls.TYPE_STICKER, cls.TYPE_GIF, cls.TYPE_AUDIO]
+        return [cls.TYPE_IMAGE, cls.TYPE_ARTICLE, cls.TYPE_STICKER,
+                cls.TYPE_GIF, cls.TYPE_AUDIO, cls.TYPE_DOCUMENT]
 
     def __init__(self, user_id: str,
                  list_name: str,

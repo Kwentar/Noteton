@@ -5,7 +5,8 @@ from typing import List
 from telegram import InlineQueryResultArticle, ParseMode, Update, \
     InlineQueryResultCachedPhoto, InputTextMessageContent, InlineQueryResult, \
     InlineQueryResultCachedSticker, \
-    InlineQueryResultCachedGif, InlineQueryResultCachedAudio
+    InlineQueryResultCachedGif, InlineQueryResultCachedAudio, \
+    InlineQueryResultCachedDocument
 from telegram.ext import Updater, InlineQueryHandler, CommandHandler, \
     CallbackQueryHandler, MessageHandler, Filters, CallbackContext, \
     ChosenInlineResultHandler
@@ -43,7 +44,9 @@ def callback_query_handler(update: Update, context: CallbackContext):
     if user.get_state() == NotetonState.CREATE_LIST_TYPE:
         msg = process_create_list_state(text, user)
     elif user.get_state() == NotetonState.ADD_FILE:
-        msg = process_add_file_state(text, user)
+        msg, result = process_add_file_state(text, user)
+        if result:
+            context.bot.delete_message(chat_id, user.lists_message_id)
     elif user.get_state() == NotetonState.ADD_ARTICLE:
         msg = process_add_article_state(text, user)
     else:
@@ -128,6 +131,9 @@ def get_list_items_by_type(nt_list: NotetonList,
         elif nt_list.type == NotetonList.TYPE_AUDIO:
             item_ = InlineQueryResultCachedAudio(id=id_,
                                                  audio_file_id=item.file_id)
+        elif nt_list.type == NotetonList.TYPE_DOCUMENT:
+            item_ = InlineQueryResultCachedDocument(id=id_, title=item.title,
+                                                    document_file_id=item.file_id)
         if item_:
             answer_items.append(item_)
     return answer_items
@@ -184,131 +190,80 @@ def message_handler(update: Update, context: CallbackContext):
                                  reply_markup=reply_markup)
 
 
-def photo_handler(update: Update, context: CallbackContext):
-    photo_id = update.message.photo[-1].file_id
-    user_id = update.effective_user.id
-    user = NotetonUsersManager.get_user(user_id)
-    if user.time_inline:
-        logger.debug(f'photo handler, time is {datetime.now()}, '
-                     f'total seconds is'
-                     f'{(datetime.now() - user.time_inline).total_seconds()}')
+def common_file_handler(user, bot, chat_id, file_id,
+                        file_type, word, title=None):
     if user.get_state() == NotetonState.NO_ANSWER and \
             user.time_inline is not None and \
             (datetime.now() - user.time_inline).total_seconds() < \
             NotetonUsersManager.time_no_answer:
         user.set_state(NotetonState.MAIN_MENU)
-        return
+        return None
 
-    chat_id = update.message.chat_id
-    item = NotetonListItemFile(user_id=user_id,
-                               file_id=photo_id)
+    item = NotetonListItemFile(user_id=user.user_id,
+                               file_id=file_id,
+                               title=title)
     user.tmp_item = item
     user.set_state(NotetonState.ADD_FILE)
-    lists = NotetonUsersManager.get_lists_of_user_by_type(user_id,
-                                                          NotetonList.TYPE_IMAGE)
+    lists = NotetonUsersManager.get_lists_of_user_by_type(user.user_id,
+                                                          file_type)
     if not lists:
-        context.bot.send_message(chat_id=chat_id,
-                                 text=f'Oops, you have no lists with images,'
-                                      f'please, create at least one first')
-        return
-    reply_markup = generate_lists_buttons(lists)
+        bot.send_message(chat_id=chat_id,
+                         text=f'Oops, you have no lists with {word},'
+                              f'please, create at least one first')
+    else:
+        reply_markup = generate_lists_buttons(lists)
 
-    context.bot.send_message(chat_id=chat_id,
-                             text=f'Choose the list:',
-                             reply_markup=reply_markup)
+        msg = bot.send_message(chat_id=chat_id,
+                               text=f'Choose the list:',
+                               reply_markup=reply_markup)
+        user.lists_message_id = msg.message_id
+
+
+def photo_handler(update: Update, context: CallbackContext):
+    logger.info(f'Photo handler')
+
+    photo_id = update.message.photo[-1].file_id
+    user = NotetonUsersManager.get_user(update.effective_user.id)
+
+    common_file_handler(user, context.bot, update.message.chat_id,
+                        photo_id, NotetonList.TYPE_IMAGE, 'images')
 
 
 def sticker_handler(update: Update, context: CallbackContext):
     logger.info(f'Sticker handler')
     sticker_id = update.message.sticker.file_id
-    user_id = update.effective_user.id
-    user = NotetonUsersManager.get_user(user_id)
-    if user.get_state() == NotetonState.NO_ANSWER and \
-            user.time_inline is not None and \
-            (datetime.now() - user.time_inline).total_seconds() < \
-            NotetonUsersManager.time_no_answer:
-        user.set_state(NotetonState.MAIN_MENU)
-        return
+    user = NotetonUsersManager.get_user(update.effective_user.id)
 
-    chat_id = update.message.chat_id
-    item = NotetonListItemFile(user_id=user_id,
-                               file_id=sticker_id)
-    user.tmp_item = item
-    user.set_state(NotetonState.ADD_FILE)
-    lists = NotetonUsersManager.get_lists_of_user_by_type(user_id,
-                                                          NotetonList.TYPE_STICKER)
-    if not lists:
-        context.bot.send_message(chat_id=chat_id,
-                                 text=f'Oops, you have no lists with stickers,'
-                                      f'please, create at least one first')
-        return
-    reply_markup = generate_lists_buttons(lists)
-
-    context.bot.send_message(chat_id=chat_id,
-                             text=f'Choose the list:',
-                             reply_markup=reply_markup)
+    common_file_handler(user, context.bot, update.message.chat_id,
+                        sticker_id, NotetonList.TYPE_STICKER, 'stickers')
 
 
 def gif_handler(update: Update, context: CallbackContext):
     logger.info(f'GIF handler')
     gif_id = update.message.animation.file_id
-    user_id = update.effective_user.id
-    user = NotetonUsersManager.get_user(user_id)
-    if user.get_state() == NotetonState.NO_ANSWER and \
-            user.time_inline is not None and \
-            (datetime.now() - user.time_inline).total_seconds() < \
-            NotetonUsersManager.time_no_answer:
-        user.set_state(NotetonState.MAIN_MENU)
-        return
+    user = NotetonUsersManager.get_user(update.effective_user.id)
 
-    chat_id = update.message.chat_id
-    item = NotetonListItemFile(user_id=user_id,
-                               file_id=gif_id)
-    user.tmp_item = item
-    user.set_state(NotetonState.ADD_FILE)
-    lists = NotetonUsersManager.get_lists_of_user_by_type(user_id,
-                                                          NotetonList.TYPE_GIF)
-    if not lists:
-        context.bot.send_message(chat_id=chat_id,
-                                 text=f'Oops, you have no lists with gifs,'
-                                      f' please, create at least one first')
-        return
-    reply_markup = generate_lists_buttons(lists)
-
-    context.bot.send_message(chat_id=chat_id,
-                             text=f'Choose the list:',
-                             reply_markup=reply_markup)
+    common_file_handler(user, context.bot, update.message.chat_id,
+                        gif_id, NotetonList.TYPE_GIF, 'gifs')
 
 
 def audio_handler(update: Update, context: CallbackContext):
     logger.info(f'Audio handler')
     audio_id = update.message.audio.file_id
-    user_id = update.effective_user.id
-    user = NotetonUsersManager.get_user(user_id)
-    if user.get_state() == NotetonState.NO_ANSWER and \
-            user.time_inline is not None and \
-            (datetime.now() - user.time_inline).total_seconds() < \
-            NotetonUsersManager.time_no_answer:
-        user.set_state(NotetonState.MAIN_MENU)
-        return
+    user = NotetonUsersManager.get_user(update.effective_user.id)
 
-    chat_id = update.message.chat_id
-    item = NotetonListItemFile(user_id=user_id,
-                               file_id=audio_id)
-    user.tmp_item = item
-    user.set_state(NotetonState.ADD_FILE)
-    lists = NotetonUsersManager.get_lists_of_user_by_type(user_id,
-                                                          NotetonList.TYPE_AUDIO)
-    if not lists:
-        context.bot.send_message(chat_id=chat_id,
-                                 text=f'Oops, you have no lists with audios,'
-                                      f' please, create at least one first')
-        return
-    reply_markup = generate_lists_buttons(lists)
+    common_file_handler(user, context.bot, update.message.chat_id,
+                        audio_id, NotetonList.TYPE_AUDIO, 'audios')
 
-    context.bot.send_message(chat_id=chat_id,
-                             text=f'Choose the list:',
-                             reply_markup=reply_markup)
+
+def document_handler(update: Update, context: CallbackContext):
+    logger.info(f'Document handler')
+    document_id = update.message.document.file_id
+    user = NotetonUsersManager.get_user(update.effective_user.id)
+
+    common_file_handler(user, context.bot, update.message.chat_id,
+                        document_id, NotetonList.TYPE_DOCUMENT, 'documents',
+                        update.message.document.file_name)
 
 
 def test_handler(update: Update, context: CallbackContext):
@@ -420,6 +375,7 @@ def main():
     dp.add_handler(MessageHandler(Filters.sticker, sticker_handler))
     dp.add_handler(MessageHandler(Filters.animation, gif_handler))
     dp.add_handler(MessageHandler(Filters.audio, audio_handler))
+    dp.add_handler(MessageHandler(Filters.document, document_handler))
     dp.add_handler(MessageHandler(Filters.all, test_handler))
 
     updater.start_polling()
