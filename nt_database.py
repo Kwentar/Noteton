@@ -17,18 +17,32 @@ class NotetonDatabaseManager:
         self.list_table = self.db.Table('NotetonList')
         self.list_item_table = self.db.Table('NotetonListItem')
 
-    def get_user(self, user_id):
+    def get_user(self, user_id, name, full_name):
         if type(user_id) != str:
             user_id = str(user_id)
         response = self.users_table.get_item(Key={'user_id': user_id})
-        user = NotetonUser(user_id=user_id)
+        user = NotetonUser(user_id=user_id, user_name=name, full_name=full_name)
 
         if 'Item' not in response:
             self.users_table.put_item(Item=user.convert_user_to_dict())
         else:
             item = response['Item']
             user.setup_registration_date_from_string(item['registration_date'])
+            user.name = item['user_name']
+            user.full_name = item['full_name']
         return user
+
+    def get_users(self):
+        response = self.users_table.scan()
+        users = []
+        for item in response['Items']:
+            user = NotetonUser(user_id=item['user_id'],
+                               user_name=item['user_name'],
+                               full_name=item['full_name'])
+            user.setup_registration_date_from_string(item['registration_date'])
+            users.append(user)
+
+        return users
 
     def create_list(self, user_id: str, nt_list: NotetonList):
         list_dictionary = {'user_id': user_id,

@@ -21,8 +21,8 @@ class NotetonUsersManager:
         def __str__(self):
             return f'NotetonUsersManager'
 
-        def add_user(self, user_id):
-            user = self.db.get_user(user_id)
+        def add_user(self, user_id, name, full_name):
+            user = self.db.get_user(user_id, name, full_name)
             self.users[user_id] = user
 
     def __init__(self):
@@ -43,15 +43,15 @@ class NotetonUsersManager:
             cls.instance = cls.__NotetonUsersManager()
 
     @classmethod
-    def get_user(cls, user_id: str) -> NotetonUser:
+    def get_user(cls, user_id: str, name='', full_name='') -> NotetonUser:
         user_id = cls.__fix_id_type(user_id)
         if user_id not in cls.instance.users:
-            cls.instance.add_user(user_id)
+            cls.instance.add_user(user_id, name, full_name)
         return cls.instance.users[user_id]
 
     @classmethod
     def get_users(cls) -> List[NotetonUser]:
-        return cls.instance.users
+        return cls.instance.db.get_users()
 
     @classmethod
     def add_list_to_user(cls, user_id: str, nt_list: NotetonList):
