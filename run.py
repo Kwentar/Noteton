@@ -1,7 +1,8 @@
-import logging
+import sys
 from datetime import datetime
 from typing import List
 
+from loguru import logger
 from telegram import InlineQueryResultArticle, ParseMode, Update, \
     InlineQueryResultCachedPhoto, InputTextMessageContent, InlineQueryResult, \
     InlineQueryResultCachedSticker, \
@@ -26,12 +27,6 @@ from process_states import process_feedback, process_edit_list, \
 from telegram_buttons import generate_list_types_buttons, \
     generate_lists_buttons, generate_main_menu, generate_buttons_my_lists, \
     generate_button_with_one_list
-
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO)
-
-logger = logging.getLogger('NOTETON MAIN')
 
 
 def callback_query_handler(update: Update, context: CallbackContext):
@@ -382,9 +377,23 @@ def chosen_inline_result_handler(update: Update, context: CallbackContext):
         user.set_state(NotetonState.MAIN_MENU)
 
 
+@logger.catch
 def main():
+    config = {
+        'handlers': [
+            {'sink': sys.stdout, 'level': 'INFO'},
+            {'sink': 'logs/logs.log', 'serialize': False, 'level': 'DEBUG'},
+        ],
+    }
+    logger.configure(**config)
+    logger.info('Bot has started')
+    NotetonUsersManager.init_instance()
+
     updater = Updater(token, use_context=True)
     dp = updater.dispatcher
+
+    updater.logger = logger
+    dp.logger = logger
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("create_list", create_list))
     dp.add_handler(CommandHandler("my_lists", my_lists))
@@ -396,6 +405,7 @@ def main():
     dp.add_handler(InlineQueryHandler(inline_query))
     dp.add_handler(ChosenInlineResultHandler(chosen_inline_result_handler))
     dp.add_handler(CallbackQueryHandler(callback_query_handler))
+
     dp.add_handler(MessageHandler(Filters.text, message_handler))
     dp.add_handler(MessageHandler(Filters.photo, photo_handler))
     dp.add_handler(MessageHandler(Filters.sticker, sticker_handler))
@@ -409,6 +419,4 @@ def main():
 
 
 if __name__ == '__main__':
-    logger.info(f'Bot has started')
-    NotetonUsersManager.init_instance()
     main()
