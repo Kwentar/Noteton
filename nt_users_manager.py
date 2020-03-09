@@ -27,18 +27,18 @@ class NotetonUsersManager:
             logger.info('Init NotetonUsersManager')
             self.db = NotetonDatabaseManager()
 
-        def add_user(self, user_id: str, name: str, full_name: str) -> None:
+        def add_user(self, user: NotetonUser) -> None:
             """
             Add user to manager (or create new one if first time)
-            :param user_id: id of user, the same as telegram user id,
-            must be string
-            :param name: unique user_name from telegram
-            :param full_name: full name from telegram
+            :param user: user to be added
             :return: None, add user to users dict
             """
-            user = self.db.get_user(user_id, name, full_name)
-            logger.info(f'{user} is added to manager')
-            self.users[user_id] = user
+            user_ = self.db.get_user(user.id)
+            if user_ is None:
+                self.db.add_new_user(user)
+                user_ = user
+            logger.info(f'{user_} is added to manager')
+            self.users[user.id] = user_
 
     def __init__(self):
         # init singleton
@@ -75,7 +75,8 @@ class NotetonUsersManager:
         """
         user_id = cls.__fix_id_type(user_id)
         if user_id not in cls.instance.users:
-            cls.instance.add_user(user_id, name, full_name)
+            user = NotetonUser(user_id, name, full_name)
+            cls.instance.add_user(user)
         return cls.instance.users[user_id]
 
     @classmethod
@@ -100,11 +101,22 @@ class NotetonUsersManager:
 
     @classmethod
     def get_lists_of_user(cls, user_id: str) -> List[NotetonList]:
+        """
+        Get all lists of user by user id
+        :param user_id: requested user id
+        :return: lists with NotetonList (could be empty)
+        """
         user_id = cls.__fix_id_type(user_id)
         return cls.instance.db.get_lists_of_user(user_id)
 
     @classmethod
     def change_list_name(cls, user_id: str, nt_list: NotetonList):
+        """
+        Edit list name
+        :param user_id:
+        :param nt_list:
+        :return:
+        """
         user_id = cls.__fix_id_type(user_id)
         return cls.instance.db.create_list(user_id, nt_list)
 
@@ -141,11 +153,11 @@ class NotetonUsersManager:
         :param item: item to add
         :return: response from db
         """
-        return cls.instance.db.add_item(item)
+        return cls.instance.db.add_list_item(item)
 
     @classmethod
     def add_article_to_list(cls, item: NotetonListItemArticle):
-        return cls.instance.db.add_item(item)
+        return cls.instance.db.add_list_item(item)
 
     @classmethod
     def get_items_of_list(cls, user_id, nt_list: NotetonList):

@@ -8,7 +8,6 @@ from nt_list_item_article import NotetonListItemArticle
 from nt_state import NotetonState
 from nt_user import NotetonUser
 from nt_users_manager import NotetonUsersManager
-from config import god_chat_id
 from telegram_buttons import generate_lists_buttons, \
     generate_button_with_one_list
 
