@@ -8,3 +8,6 @@ class NotetonListItem:
         if id_ is None:
             id_ = uuid4()
         self.id = id_
+
+    def to_dict(self):
+        pass

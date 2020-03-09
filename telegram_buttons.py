@@ -33,6 +33,20 @@ def generate_lists_buttons(nt_lists):
     return reply_markup
 
 
+def generate_button_with_one_list(list_name: str) -> InlineKeyboardMarkup:
+    """
+    Generate button for case when user has only one list with this type
+    :param list_name:
+    :return: InlineKeyboardMarkup with one button (list is called list_name)
+    """
+    buttons = [
+        [InlineKeyboardButton(list_name,
+                              switch_inline_query_current_chat=list_name)]
+    ]
+    reply_markup = InlineKeyboardMarkup(buttons)
+    return reply_markup
+
+
 def generate_buttons_my_lists(nt_lists):
     """
     Generate buttons for the my list command
